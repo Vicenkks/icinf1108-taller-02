@@ -55,7 +55,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 # ==========================================
 # Stage 3: Production
 # ==========================================
-FROM python:3.12-slim AS prod
+FROM python:3.14-slim AS prod
 
 # uv is NOT needed in production, keeping the final image as small as possible
 ENV PATH="/opt/venv/bin:$PATH" \
