@@ -1,75 +1,79 @@
-from uuid import uuid4
-
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.pets.pets_repository import PetsRepository, pets_repository
+from app.pets.pets_model import PetModel
+from app.pets.pets_repository import PetsRepository
 from app.pets.pets_schemas import CreatePetDto, Pet, PetList, UpdatePetDto
-from app.shared.datetimes import utc_now
 from app.shared.exceptions import conflict
-from app.students.students_service import StudentsService, students_service
+from app.shared.mappers import pet_to_schema
+from app.students.students_repository import StudentsRepository
 
 
 class PetsService:
-    def __init__(self, repository: PetsRepository, students: StudentsService) -> None:
-        self.repository = repository
-        self.students_service = students
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self.repository = PetsRepository(db)
+        self.students_repository = StudentsRepository(db)
 
     def find_all_for_student(self, student_id: str) -> PetList:
-        self.students_service.find_by_id(student_id)
+        self._find_student_or_404(student_id)
+        pets = self.repository.find_all_by_student(student_id)
 
-        pets = sorted(
-            self.repository.find_all_by_student(student_id),
-            key=lambda pet: pet.createdAt,
-            reverse=True,
+        return PetList(
+            total=len(pets),
+            items=[pet_to_schema(pet) for pet in pets],
         )
 
-        return PetList(total=len(pets), items=pets)
-
     def create(self, student_id: str, data: CreatePetDto) -> Pet:
-        self.students_service.find_by_id(student_id)
+        self._find_student_or_404(student_id)
         self.assert_no_conflicts(student_id, data)
 
-        now = utc_now()
-        pet = Pet(
-            id=str(uuid4()),
-            studentId=student_id,
+        pet = PetModel(
+            student_id=student_id,
             name=data.name,
             species=data.species,
             age=data.age,
-            createdAt=now,
-            updatedAt=now,
         )
 
-        return self.repository.save(pet)
+        self.repository.add(pet)
+        self.db.commit()
+        self.db.refresh(pet)
+
+        return pet_to_schema(pet)
 
     def update(self, student_id: str, pet_id: str, data: UpdatePetDto) -> Pet:
-        existing = self.find_owned(student_id, pet_id)
+        pet = self._find_owned_or_404(student_id, pet_id)
         self.assert_no_conflicts(student_id, data, except_id=pet_id)
 
-        updated = existing.model_copy(
-            update={
-                **data.model_dump(exclude_none=True),
-                "updatedAt": utc_now(),
-            }
-        )
+        for field, value in data.model_dump(exclude_none=True).items():
+            setattr(pet, field, value)
 
-        return self.repository.save(updated)
+        self.db.commit()
+        self.db.refresh(pet)
+
+        return pet_to_schema(pet)
 
     def delete(self, student_id: str, pet_id: str) -> Pet:
-        existing = self.find_owned(student_id, pet_id)
-        self.repository.delete(pet_id)
+        pet = self._find_owned_or_404(student_id, pet_id)
+        result = pet_to_schema(pet)
 
-        return existing
+        self.repository.delete(pet)
+        self.db.commit()
 
-    def delete_all_for_student(self, student_id: str) -> None:
-        self.repository.delete_by_student(student_id)
+        return result
 
-    def find_owned(self, student_id: str, pet_id: str) -> Pet:
-        self.students_service.find_by_id(student_id)
+    def _find_student_or_404(self, student_id: str) -> None:
+        if self.students_repository.find_by_id(student_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Estudiante no encontrado",
+            )
+
+    def _find_owned_or_404(self, student_id: str, pet_id: str) -> PetModel:
+        self._find_student_or_404(student_id)
 
         pet = self.repository.find_by_id(pet_id)
-
-        if pet is None or pet.studentId != student_id:
+        if pet is None or pet.student_id != student_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Mascota no encontrada",
@@ -92,6 +96,3 @@ class PetsService:
             raise conflict(
                 {"name": {"message": "Ya tienes una mascota con ese nombre"}}
             )
-
-
-pets_service = PetsService(pets_repository, students_service)
