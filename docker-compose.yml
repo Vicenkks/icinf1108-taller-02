@@ -1,10 +1,12 @@
 services:
   api-dev:
-    profiles: ["dev"]
     build:
       context: .
       target: dev
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command:
+      - sh
+      - -c
+      - "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "8000:8000"
     volumes:
@@ -12,10 +14,9 @@ services:
       - ./public:/app/public
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
-    env_file:
-      - .env
     environment:
       ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://estudiantes:123@db:5432/mi_base_datos}
     depends_on:
       db:
         condition: service_healthy
@@ -27,13 +28,16 @@ services:
     build:
       context: .
       target: prod
+    command:
+      - sh
+      - -c
+      - "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers $$UVICORN_WORKERS"
     ports:
       - "8000:8000"
-    env_file:
-      - .env
     environment:
       ENVIRONMENT: production
       UVICORN_WORKERS: 4
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://estudiantes:123@db:5432/mi_base_datos}
     depends_on:
       db:
         condition: service_healthy
@@ -45,8 +49,10 @@ services:
     image: postgres:16-alpine
     container_name: estudiantes-db
     restart: always
-    env_file:
-      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-estudiantes}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
+      POSTGRES_DB: ${POSTGRES_DB:-mi_base_datos}
     ports:
       - "5432:5432"
     volumes:
