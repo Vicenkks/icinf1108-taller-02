@@ -488,3 +488,9 @@ tsconfig.tsbuildinfo
 
 # Solución de referencia de la actividad Docker (no versionar)
 solucion/
+
+# Pruebas rapidas en la base de datos local
+
+*.db 
+*.sqlite 
+*.sqlite3
