@@ -1,57 +1,42 @@
-# ==========================================
-# Stage 1: Build (Production Dependencies)
-# ==========================================
+# Stage 1: Build
 FROM python:3.14-slim AS build
 
-# Inject the official uv binary into the image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Optimize uv for Docker: compile bytecode and use copy mode for faster, cache-friendly installs
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON=3.14 \
     PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
-# Copy dependency files first to leverage Docker layer caching
 COPY pyproject.toml uv.lock* ./
 
-# Create virtual environment and install ONLY production dependencies
-RUN uv venv /opt/venv && \
-    uv sync --frozen --no-dev --no-install-project
-
+RUN uv sync --frozen --no-dev --no-install-project
 
 # ==========================================
 # Stage 2: Development
 # ==========================================
 FROM python:3.14-slim AS dev
 
-# uv is needed in dev to install dev-dependencies and run scripts
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 ENV PATH="/opt/venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON=3.14
 
 WORKDIR /app
 
-# Copy the production venv from the build stage
 COPY --from=build /opt/venv /opt/venv
-
-# Copy dependency files to install development dependencies (pytest, ruff, etc.)
 COPY pyproject.toml uv.lock* ./
 
-# Install development dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN uv sync --frozen --group dev --no-install-project
-
-# Copy the application source code
-COPY . .
-
-EXPOSE 8000
-
-# Run with hot-reloading enabled
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-
-
 # ==========================================
 # Stage 3: Production
 # ==========================================
