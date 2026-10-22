@@ -8,8 +8,12 @@ services:
     volumes:
       # Mount local code for hot-reloading
       - ./app:/app/app 
+    env_file:
+      - .env
     environment:
       - ENVIRONMENT=development
+    depends_on:
+      - db
 
   api-prod:
     build:
@@ -17,7 +21,34 @@ services:
       target: prod
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - ENVIRONMENT=production
       - UVICORN_WORKERS=4 # Override workers if needed
     restart: always
+    depends_on:
+      - db
+    
+  db:
+    image: postgres
+    restart: always
+    # set shared memory limit when using docker compose
+    shm_size: 128mb
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
