@@ -1,4 +1,11 @@
 services:
+  
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+
   api-dev:
     build:
       context: .
@@ -11,9 +18,34 @@ services:
     env_file:
       - .env
     environment:
-      - ENVIRONMENT=development
+      ENVIRONMENT : development
+      DATABASE_URL: postgres://Estudiantes:B#C$KE$%nd@db:5432/estudiantes_proyecto
     depends_on:
       - db
+  
+  db:
+    image: postgres
+    restart: always
+    ports: 
+      - "5432:5432"
+    # set shared memory limit when using docker compose
+    shm_size: 128mb
+    # or set shared memory limit when deploy via swarm stack
+    #volumes:
+    #  - type: tmpfs
+    #    target: /dev/shm
+    #    tmpfs:
+    #      size: 134217728 # 128*2^20 bytes = 128Mb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: estudiantes
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+volumes:
+  postgres_data:
+    driver: local
+
 
   api-prod:
     build:
@@ -27,28 +59,23 @@ services:
       - ENVIRONMENT=production
       - UVICORN_WORKERS=4 # Override workers if needed
     restart: always
-    depends_on:
-      - db
     
   db:
     image: postgres
     restart: always
     # set shared memory limit when using docker compose
     shm_size: 128mb
-    env_file:
-      - .env
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    # or set shared memory limit when deploy via swarm stack
+    #volumes:
+    #  - type: tmpfs
+    #    target: /dev/shm
+    #    tmpfs:
+    #      size: 134217728 # 128*2^20 bytes = 128Mb
+    environment:
+      POSTGRES_PASSWORD: example
 
   adminer:
     image: adminer
     restart: always
     ports:
       - 8080:8080
-    depends_on:
-      - db
-
-volumes:
-  postgres_data:
