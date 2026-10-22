@@ -1,7 +1,7 @@
 # ==========================================
 # Stage 1: Build (Production Dependencies)
 # ==========================================
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 
 # Inject the official uv binary into the image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -24,7 +24,7 @@ RUN uv venv /opt/venv && \
 # ==========================================
 # Stage 2: Development
 # ==========================================
-FROM python:3.12-slim AS dev
+FROM python:3.14-slim AS dev
 
 # uv is needed in dev to install dev-dependencies and run scripts
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -55,7 +55,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 # ==========================================
 # Stage 3: Production
 # ==========================================
-FROM python:3.12-slim AS prod
+FROM python:3.14-slim AS prod
 
 # uv is NOT needed in production, keeping the final image as small as possible
 ENV PATH="/opt/venv/bin:$PATH" \
