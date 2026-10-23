@@ -7,6 +7,7 @@ from app.pets.pets_schemas import CreatePetDto, Pet, PetList, UpdatePetDto
 from app.shared.exceptions import conflict
 from app.shared.mappers import pet_to_schema
 from app.students.students_repository import StudentsRepository
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 
 class PetsService:
@@ -35,9 +36,15 @@ class PetsService:
             age=data.age,
         )
 
-        self.repository.add(pet)
-        self.db.commit()
-        self.db.refresh(pet)
+        try:
+            self.repository.add(pet)
+            self.db.commit()
+            self.db.refresh(pet)
+        except IntegrityError as error:
+            self.db.rollback()
+            raise conflict(
+                {"name": {"message": "Ya tienes una mascota con ese nombre"}}
+            ) from error
 
         return pet_to_schema(pet)
 
@@ -48,8 +55,14 @@ class PetsService:
         for field, value in data.model_dump(exclude_none=True).items():
             setattr(pet, field, value)
 
-        self.db.commit()
-        self.db.refresh(pet)
+        try:
+            self.db.commit()
+            self.db.refresh(pet)
+        except IntegrityError as error:
+            self.db.rollback()
+            raise conflict(
+                {"name": {"message": "Ya tienes una mascota con ese nombre"}}
+            ) from error
 
         return pet_to_schema(pet)
 
@@ -57,8 +70,12 @@ class PetsService:
         pet = self._find_owned_or_404(student_id, pet_id)
         result = pet_to_schema(pet)
 
-        self.repository.delete(pet)
-        self.db.commit()
+        try:
+            self.repository.delete(pet)
+            self.db.commit()
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise
 
         return result
 
